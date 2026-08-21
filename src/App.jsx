@@ -3,6 +3,7 @@ import {
   Play, 
   Pause, 
   RotateCcw, 
+  RotateCw,
   Volume2, 
   VolumeX, 
   Trophy, 
@@ -133,6 +134,7 @@ export default function App() {
   // Canvas refs
   const canvasRef = useRef(null);
   const nextCanvasRef = useRef(null);
+  const mobileNextCanvasRef = useRef(null);
   const audioRef = useRef(null);
 
   // Core Tetris state refs (to bypass closure issues in event listeners & loops)
@@ -388,41 +390,41 @@ export default function App() {
 
   // Draw Next Piece canvas
   const drawNextPiece = useCallback(() => {
-    const canvas = nextCanvasRef.current;
-    if (!canvas || !nextPieceRef.current) return;
-    const ctx = canvas.getContext('2d');
-    const nextPiece = nextPieceRef.current;
+    const drawToCanvas = (canvas, size) => {
+      if (!canvas || !nextPieceRef.current) return;
+      const ctx = canvas.getContext('2d');
+      const nextPiece = nextPieceRef.current;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    const size = 25; // slightly smaller blocks for preview
-    const offsetX = (canvas.width - nextPiece.shape[0].length * size) / 2;
-    const offsetY = (canvas.height - nextPiece.shape.length * size) / 2;
+      const offsetX = (canvas.width - nextPiece.shape[0].length * size) / 2;
+      const offsetY = (canvas.height - nextPiece.shape.length * size) / 2;
 
-    for (let y = 0; y < nextPiece.shape.length; y++) {
-      for (let x = 0; x < nextPiece.shape[y].length; x++) {
-        if (nextPiece.shape[y][x]) {
-          ctx.save();
-          // Create gradient color
-          const gradient = ctx.createLinearGradient(
-            offsetX + x * size,
-            offsetY + y * size,
-            offsetX + (x + 1) * size,
-            offsetY + (y + 1) * size
-          );
-          gradient.addColorStop(0, nextPiece.color);
-          gradient.addColorStop(1, adjustColorBrightness(nextPiece.color, -30));
+      for (let y = 0; y < nextPiece.shape.length; y++) {
+        for (let x = 0; x < nextPiece.shape[y].length; x++) {
+          if (nextPiece.shape[y][x]) {
+            ctx.save();
+            const gradient = ctx.createLinearGradient(
+              offsetX + x * size,
+              offsetY + y * size,
+              offsetX + (x + 1) * size,
+              offsetY + (y + 1) * size
+            );
+            gradient.addColorStop(0, nextPiece.color);
+            gradient.addColorStop(1, adjustColorBrightness(nextPiece.color, -30));
 
-          ctx.fillStyle = gradient;
-          ctx.shadowColor = nextPiece.color;
-          ctx.shadowBlur = 6;
-          
-          // Draw block
-          ctx.fillRect(offsetX + x * size + 1, offsetY + y * size + 1, size - 2, size - 2);
-          ctx.restore();
+            ctx.fillStyle = gradient;
+            ctx.shadowColor = nextPiece.color;
+            ctx.shadowBlur = 6;
+            ctx.fillRect(offsetX + x * size + 1, offsetY + y * size + 1, size - 2, size - 2);
+            ctx.restore();
+          }
         }
       }
-    }
+    };
+
+    drawToCanvas(nextCanvasRef.current, 25);
+    drawToCanvas(mobileNextCanvasRef.current, 9);
   }, []);
 
   // Merge current piece to board
@@ -708,7 +710,7 @@ export default function App() {
       <audio ref={audioRef} src="/sound.wav" loop />
 
       {/* Header with Waveframe Logo and Neon Aesthetics */}
-      <header className="game-header">
+      <header className={`game-header ${isPlaying ? 'mobile-hide-header' : ''}`}>
         <div className="logo-container">
           <img src="/icon.png" className="logo-icon" alt="Waveframe Logo" />
           <h1 className="logo-title">
@@ -811,6 +813,46 @@ export default function App() {
         {/* Center Panel: Main Board Canvas */}
         <div className="board-container">
           
+          {/* Mobile HUD Top Bar */}
+          <div className="mobile-hud-bar">
+            <div className="mobile-hud-stat">
+              <span className="mobile-hud-label">{t.score}</span>
+              <span className="mobile-hud-val cyan">{score}</span>
+            </div>
+            <div className="mobile-hud-stat">
+              <span className="mobile-hud-label">{t.lines}</span>
+              <span className="mobile-hud-val purple">{lines}</span>
+            </div>
+            <div className="mobile-hud-stat">
+              <span className="mobile-hud-label">{t.level}</span>
+              <span className="mobile-hud-val amber">{level}</span>
+            </div>
+            <div className="mobile-hud-next">
+              <span className="mobile-hud-label">{t.next}</span>
+              <div className="mobile-next-canvas-wrapper">
+                <canvas ref={mobileNextCanvasRef} width="44" height="44" />
+              </div>
+            </div>
+            {isPlaying && (
+              <div className="mobile-hud-actions">
+                <button 
+                  onClick={togglePause} 
+                  className="mobile-action-icon"
+                  title={t.pauseGameBtn}
+                >
+                  {isPaused ? <Play size={15} fill="white" /> : <Pause size={15} />}
+                </button>
+                <button 
+                  onClick={() => setIsMuted(prev => !prev)} 
+                  className="mobile-action-icon"
+                  title={isMuted ? t.unmuteTip : t.muteTip}
+                >
+                  {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="board-wrapper">
             <div className="board-inner">
               <canvas 
@@ -822,19 +864,39 @@ export default function App() {
 
               {/* Game overlays */}
               {!isPlaying && !isGameOver && (
-                <div className="overlay">
-                  <div className="overlay-icon-wrapper purple">
-                    <Gamepad2 size={32} />
+                <div 
+                  className="overlay start-overlay" 
+                  onClick={startNewGame}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="overlay-badge">RETRO ARCADE</div>
+                  <div className="overlay-icon-wrapper purple glow-pulse">
+                    <Gamepad2 size={36} />
                   </div>
-                  <h2 className="overlay-title">
-                    {t.readyToPlay}
+                  <h2 className="overlay-title brand-title">
+                    Wave<span className="cyan-text">Tris</span>
                   </h2>
+                  <p className="overlay-subtitle">
+                    {lang === 'es' 
+                      ? 'Alinea los bloques, completa líneas y acumula la máxima puntuación.' 
+                      : 'Line up blocks, clear lines and achieve the ultimate high score.'}
+                  </p>
+
+                  <div className="start-control-hints">
+                    <span className="hint-pill">🕹️ {t.ctrlMove}</span>
+                    <span className="hint-pill">🔄 {t.ctrlRotate}</span>
+                    <span className="hint-pill">⚡ {t.ctrlHard}</span>
+                  </div>
+
                   <button 
-                    onClick={startNewGame}
-                    className="btn btn-primary"
+                    onClick={(e) => { e.stopPropagation(); startNewGame(); }}
+                    className="btn btn-primary big-start-btn"
                   >
-                    <Play size={16} fill="white" /> {t.startBtn}
+                    <Play size={20} fill="white" /> {t.startBtn}
                   </button>
+                  <div className="tap-start-text">
+                    {lang === 'es' ? 'TOCA O PRESIONA ESPACIO PARA INICIAR' : 'TAP OR PRESS SPACE TO PLAY'}
+                  </div>
                 </div>
               )}
 
@@ -923,22 +985,61 @@ export default function App() {
           {isPlaying && !isPaused && (
             <div className="mobile-gamepad">
               <div className="gamepad-direction">
-                <button onClick={moveLeft} className="gamepad-btn" aria-label="Left">
-                  <ArrowLeft size={24} />
+                <button 
+                  onClick={moveLeft}
+                  onTouchStart={(e) => { e.preventDefault(); moveLeft(); }}
+                  className="gamepad-btn btn-dir" 
+                  aria-label="Left"
+                >
+                  <ArrowLeft size={22} />
                 </button>
-                <button onClick={moveDown} className="gamepad-btn" aria-label="Soft Drop">
-                  <ArrowDown size={24} />
+                <button 
+                  onClick={moveDown}
+                  onTouchStart={(e) => { e.preventDefault(); moveDown(); }}
+                  className="gamepad-btn btn-dir" 
+                  aria-label="Soft Drop"
+                >
+                  <ArrowDown size={22} />
                 </button>
-                <button onClick={moveRight} className="gamepad-btn" aria-label="Right">
-                  <ArrowRight size={24} />
+                <button 
+                  onClick={moveRight}
+                  onTouchStart={(e) => { e.preventDefault(); moveRight(); }}
+                  className="gamepad-btn btn-dir" 
+                  aria-label="Right"
+                >
+                  <ArrowRight size={22} />
                 </button>
               </div>
+
+              {/* Center GIRAR Button */}
+              <button 
+                onClick={rotate}
+                onTouchStart={(e) => { e.preventDefault(); rotate(); }}
+                className="gamepad-btn action-rotate" 
+                aria-label="Girar Pieza"
+                title="Girar Bloque"
+              >
+                <RotateCw size={26} />
+                <span className="btn-subtext">GIRAR</span>
+              </button>
+
               <div className="gamepad-actions">
-                <button onClick={hardDrop} className="gamepad-btn action-drop" aria-label="Hard Drop">
-                  <ChevronsDown size={20} />
+                <button 
+                  onClick={hardDrop}
+                  onTouchStart={(e) => { e.preventDefault(); hardDrop(); }}
+                  className="gamepad-btn action-drop" 
+                  aria-label="Hard Drop"
+                >
+                  <ChevronsDown size={18} />
+                  <span className="btn-subtext">DROP</span>
                 </button>
-                <button onClick={rotate} className="gamepad-btn action-rotate" aria-label="Rotate">
-                  <ArrowUp size={28} />
+                <button 
+                  onClick={togglePause} 
+                  className="gamepad-btn action-pause" 
+                  title={t.pauseGameBtn}
+                >
+                  <Pause size={18} />
+                  <span className="btn-subtext">PAUSA</span>
                 </button>
               </div>
             </div>
